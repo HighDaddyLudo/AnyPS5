@@ -37,6 +37,9 @@ class MockElement extends EventTarget {
         this.children = [];
         this.append(...nodes);
     }
+    remove() {
+        if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(node => node !== this);
+    }
     focus() {
         this.focused = true;
         document.activeElement = this;
@@ -98,6 +101,7 @@ async function setup(t, name) {
     get('picker-dialog').close = () => {};
     const globals = {
         document: {
+            body: root,
             documentElement: {lang: '', dir: 'ltr'},
             activeElement: null,
             getElementById: get,
@@ -108,6 +112,7 @@ async function setup(t, name) {
         window: Object.assign(new EventTarget(), {scrollTo() {}}),
         location: {hash: ''},
         history: {pushState() {}},
+        navigator: {clipboard: {async writeText() {}}},
         localStorage: {getItem() { return null; }, setItem() {}},
         setInterval: () => 0
     };
@@ -279,6 +284,56 @@ test('successful imports use the destination from a recognized profile filename'
     await app.importFile('anyps5-input.ini', binding);
     assert.equal(titleId.value, '');
     assert.equal(preview.textContent, 'anyps5-input.ini');
+});
+
+test('editing only the profile title prompts before leaving or replacing the configuration', async t => {
+    const app = await setup(t, 'unsaved-profile-title');
+    const titleId = app.get('profile-title-id');
+    const binding = 'Cross = KEY:X\n';
+    const shouldPromptOnLeave = () => {
+        const event = new Event('beforeunload', {cancelable: true});
+        Object.defineProperty(event, 'returnValue', {writable: true});
+        return !window.dispatchEvent(event);
+    };
+    await app.importFile('anyps5-input.PPSA00001.ini', binding);
+    assert.equal(shouldPromptOnLeave(), false);
+
+    titleId.value = 'PPSA00002';
+    titleId.dispatchEvent(new Event('input'));
+    assert.equal(app.get('preview').value, binding);
+    assert.equal(app.get('preview-name').textContent, 'anyps5-input.PPSA00002.ini');
+
+    await app.importFile('anyps5-input.ini', binding);
+    assert.equal(app.dialogOpens(), 1);
+    assert.equal(titleId.value, 'PPSA00002');
+    app.get('reset').click();
+    await setImmediate();
+    assert.equal(app.dialogOpens(), 2);
+    assert.equal(titleId.value, 'PPSA00002');
+    assert.equal(shouldPromptOnLeave(), true);
+
+    titleId.value = 'PPSA00001';
+    titleId.dispatchEvent(new Event('input'));
+    assert.equal(shouldPromptOnLeave(), false);
+
+    titleId.value = 'PPSA00002';
+    titleId.dispatchEvent(new Event('input'));
+    app.setDialogDecision('discard');
+    await app.importFile('anyps5-input.PPSA00003.ini', binding);
+    assert.equal(app.dialogOpens(), 3);
+    assert.equal(titleId.value, 'PPSA00003');
+    assert.equal(shouldPromptOnLeave(), false);
+
+    titleId.value = 'PPSA00004';
+    titleId.dispatchEvent(new Event('input'));
+    app.get('copy').click();
+    await setImmediate();
+    assert.equal(app.get('status').textContent, 'Configuration copied.');
+    assert.equal(shouldPromptOnLeave(), true);
+
+    app.get('download').click();
+    assert.equal(app.get('status').textContent, 'Configuration download requested.');
+    assert.equal(shouldPromptOnLeave(), false);
 });
 
 test('replacing a built-in search result keeps the new binding reachable until it has a value', async t => {

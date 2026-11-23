@@ -6,12 +6,14 @@ import {diagnostic, initialLocale, locales, translate} from './i18n.js';
 import {createDropdown} from './dropdown.js';
 
 const byId = id => document.getElementById(id);
+const profileTitleId = byId('profile-title-id');
 let entries = [];
 let settings = [];
 let controllerRemaps = [];
 const configurationText = () => serialize(entries, settings, controllerRemaps);
 const snapshot = () => JSON.stringify([entries, settings, controllerRemaps]);
 let savedConfiguration = snapshot();
+let savedTitleId = profileTitleId.value;
 let replacementRequest = 0;
 let captureTarget;
 let captureButton;
@@ -119,7 +121,7 @@ function element(tag, text, className) {
 }
 
 function isDirty() {
-    return snapshot() !== savedConfiguration;
+    return snapshot() !== savedConfiguration || profileTitleId.value !== savedTitleId;
 }
 
 async function confirmReplacement() {
@@ -377,9 +379,8 @@ function updateOutput() {
     const valid = result.errors.length === 0;
     byId('preview').value = valid ? configurationText() : '';
     byId('count').textContent = `${new Set(result.bindings.map(binding => binding.action)).size} / ${actions.length}`;
-    const titleId = byId('profile-title-id');
-    const filename = inputFilename(titleId.value);
-    titleId.setAttribute('aria-invalid', String(filename === undefined));
+    const filename = inputFilename(profileTitleId.value);
+    profileTitleId.setAttribute('aria-invalid', String(filename === undefined));
     byId('profile-title-id-error').hidden = filename !== undefined;
     byId('preview-name').textContent = filename ?? t('configuration');
     byId('download').disabled = !valid || filename === undefined;
@@ -439,7 +440,7 @@ window.addEventListener('keydown', event => {
 }, true);
 
 byId('search').addEventListener('input', filterActions);
-byId('profile-title-id').addEventListener('input', updateOutput);
+profileTitleId.addEventListener('input', updateOutput);
 byId('reset').addEventListener('click', async () => {
     const request = ++replacementRequest;
     if (!await confirmReplacement() || request !== replacementRequest) return;
@@ -449,7 +450,8 @@ byId('reset').addEventListener('click', async () => {
     savedConfiguration = snapshot();
     importReport = undefined;
     byId('import-report').hidden = true;
-    byId('profile-title-id').value = '';
+    profileTitleId.value = '';
+    savedTitleId = '';
     renderControllerRemaps();
     render();
     setStatus('resetDone');
@@ -477,7 +479,10 @@ byId('file').addEventListener('change', async event => {
         importReport = result;
         renderImportReport();
         const titleId = inputTitleId(file.name);
-        if (titleId !== undefined) byId('profile-title-id').value = titleId;
+        if (titleId !== undefined) {
+            profileTitleId.value = titleId;
+            savedTitleId = titleId;
+        }
         entries = result.entries;
         settings = result.settings;
         controllerRemaps = result.controllerRemaps;
@@ -494,7 +499,8 @@ byId('download').addEventListener('click', () => {
     const content = configurationText();
     const url = URL.createObjectURL(new Blob([content], {type: 'text/plain;charset=utf-8'}));
     const link = element('a');
-    const filename = inputFilename(byId('profile-title-id').value);
+    const titleId = profileTitleId.value;
+    const filename = inputFilename(titleId);
     if (filename === undefined) {
         URL.revokeObjectURL(url);
         return;
@@ -505,6 +511,7 @@ byId('download').addEventListener('click', () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    savedTitleId = titleId;
     savedConfiguration = snapshot();
     setStatus('downloaded');
 });
