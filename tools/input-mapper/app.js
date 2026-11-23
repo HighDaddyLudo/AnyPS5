@@ -12,6 +12,7 @@ let controllerRemaps = [];
 const configurationText = () => serialize(entries, settings, controllerRemaps);
 const snapshot = () => JSON.stringify([entries, settings, controllerRemaps]);
 let savedConfiguration = snapshot();
+let savedTitleId = byId('profile-title-id').value;
 let replacementRequest = 0;
 let captureTarget;
 let captureButton;
@@ -119,7 +120,7 @@ function element(tag, text, className) {
 }
 
 function isDirty() {
-    return snapshot() !== savedConfiguration;
+    return snapshot() !== savedConfiguration || byId('profile-title-id').value !== savedTitleId;
 }
 
 async function confirmReplacement() {
@@ -450,6 +451,7 @@ byId('reset').addEventListener('click', async () => {
     importReport = undefined;
     byId('import-report').hidden = true;
     byId('profile-title-id').value = '';
+    savedTitleId = '';
     renderControllerRemaps();
     render();
     setStatus('resetDone');
@@ -478,6 +480,7 @@ byId('file').addEventListener('change', async event => {
         renderImportReport();
         const titleId = inputTitleId(file.name);
         if (titleId !== undefined) byId('profile-title-id').value = titleId;
+        savedTitleId = byId('profile-title-id').value;
         entries = result.entries;
         settings = result.settings;
         controllerRemaps = result.controllerRemaps;
@@ -494,7 +497,8 @@ byId('download').addEventListener('click', () => {
     const content = configurationText();
     const url = URL.createObjectURL(new Blob([content], {type: 'text/plain;charset=utf-8'}));
     const link = element('a');
-    const filename = inputFilename(byId('profile-title-id').value);
+    const titleId = byId('profile-title-id').value;
+    const filename = inputFilename(titleId);
     if (filename === undefined) {
         URL.revokeObjectURL(url);
         return;
@@ -505,6 +509,7 @@ byId('download').addEventListener('click', () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    savedTitleId = titleId;
     savedConfiguration = snapshot();
     setStatus('downloaded');
 });

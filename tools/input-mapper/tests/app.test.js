@@ -281,6 +281,38 @@ test('successful imports use the destination from a recognized profile filename'
     assert.equal(preview.textContent, 'anyps5-input.ini');
 });
 
+test('changing only the profile destination requires confirmation before replacement', async t => {
+    const app = await setup(t, 'confirm-profile-destination');
+    const titleId = app.get('profile-title-id');
+    await app.importFile('anyps5-input.PPSA00001.ini', 'Cross = KEY:X\n');
+    titleId.value = 'PPSA00002';
+    titleId.dispatchEvent(new Event('input'));
+
+    await app.importFile('anyps5-input.PPSA00003.ini', 'Cross = KEY:J\n');
+    assert.equal(app.dialogOpens(), 1);
+    assert.equal(titleId.value, 'PPSA00002');
+    assert.equal(app.get('preview-name').textContent, 'anyps5-input.PPSA00002.ini');
+    assert.equal(app.get('preview').value, 'Cross = KEY:X\n');
+
+    app.setDialogDecision('discard');
+    await app.importFile('anyps5-input.PPSA00003.ini', 'Cross = KEY:J\n');
+    assert.equal(app.dialogOpens(), 2);
+    assert.equal(titleId.value, 'PPSA00003');
+    assert.equal(app.get('preview').value, 'Cross = KEY:J\n');
+
+    titleId.value = 'PPSA00004';
+    titleId.dispatchEvent(new Event('input'));
+    app.get('reset').click();
+    await setImmediate();
+    assert.equal(app.dialogOpens(), 3);
+    assert.equal(titleId.value, '');
+    assert.equal(app.get('preview').value, '');
+
+    await app.importFile('anyps5-input.PPSA00005.ini', 'Cross = KEY:F\n');
+    assert.equal(app.dialogOpens(), 3);
+    assert.equal(titleId.value, 'PPSA00005');
+});
+
 test('replacing a built-in search result keeps the new binding reachable until it has a value', async t => {
     const app = await setup(t, 'search-add');
     const search = app.get('search');
